@@ -15,35 +15,41 @@ router.get('/', ({ url }) => {
 })
 
 // 处理 /list 路由，增加分页和密码验证功能
-router.get('/list', async (req) => {
-    const PASSWORD = 'xuhao';  // 设置密码
-    const query = new URL(req.url).searchParams;
+router.get('/list', async (request) => {
+    const lang = getI18n(request);  // 获取语言信息
+    const PASSWORD = 'xuhao';  // 设置访问 /list 的密码
+    const query = new URL(request.url).searchParams;
+    const password = query.get('password');  // 获取传入的密码参数
 
-    // 获取查询参数中的密码
-    const password = query.get('password');
-    if (password !== PASSWORD) {
-        const errorHtml = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Access Denied</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
-            </style>
-          </head>
-          <body>
-            <h1>Please check password.</h1>
-            <p>Password is flase.</p>
-          </body>
-        </html>`;
+    // 如果没有输入密码或密码错误，直接使用 /:path 的逻辑
+    if (!password || password !== PASSWORD) {
+        const path = 'list';  // 将 /list 视为名为 "list" 的路径
+        const cookie = Cookies.parse(request.headers.get('Cookie') || '');
+        
+        const { value, metadata } = await queryNote(path);  // 获取名为 'list' 的笔记
+        if (!metadata.pw) {
+            return returnPage('Edit', {
+                lang,
+                title: decodeURIComponent(path),
+                content: value,
+                ext: metadata,
+            });
+        }
 
-        return new Response(errorHtml, {
-            headers: { 'Content-Type': 'text/html' },
-            status: 403,
-        });
+        const valid = await checkAuth(cookie, path);  // 验证用户是否已通过身份验证
+        if (valid) {
+            return returnPage('Edit', {
+                lang,
+                title: decodeURIComponent(path),
+                content: value,
+                ext: metadata,
+            });
+        }
+
+        return returnPage('NeedPasswd', { lang, title: decodeURIComponent(path) });  // 显示密码输入页面
     }
 
-    // 获取分页参数
+    // 处理分页逻辑（如果密码正确）
     const page = parseInt(query.get('page')) || 1;
     const limit = parseInt(query.get('limit')) || 10;
     const offset = (page - 1) * limit;
@@ -109,6 +115,7 @@ router.get('/list', async (req) => {
         headers: { 'Content-Type': 'text/html' },
     });
 });
+
 
 
 router.get('/share/:md5', async (request) => {
