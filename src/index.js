@@ -14,22 +14,66 @@ router.get('/', ({ url }) => {
     return Response.redirect(`${url}${newHash}`, 302)
 })
 
-// 处理 /list 路由
-router.get('/dashborad/list', async () => {
-    const keys = await NOTES.list() // 获取所有笔记的键
+// 处理 /list 路由，增加分页和密码验证功能
+router.get('/list', async (req) => {
+    const PASSWORD = 'xuhao';  // 设置密码
+    const query = new URL(req.url).searchParams;
+
+    // 获取查询参数中的密码
+    const password = query.get('password');
+    if (password !== PASSWORD) {
+        const errorHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Access Denied</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
+            </style>
+          </head>
+          <body>
+            <h1>访问被拒绝</h1>
+            <p>密码不正确。</p>
+          </body>
+        </html>`;
+
+        return new Response(errorHtml, {
+            headers: { 'Content-Type': 'text/html' },
+            status: 403,
+        });
+    }
+
+    // 获取分页参数
+    const page = parseInt(query.get('page')) || 1;
+    const limit = parseInt(query.get('limit')) || 10;
+    const offset = (page - 1) * limit;
+
+    // 获取所有笔记的键
+    const keys = await NOTES.list();
+    
+    // 分页处理
+    const paginatedKeys = keys.keys.slice(offset, offset + limit);
 
     // 生成表格行，每行显示每个键的所有字段信息
-    const rows = keys.keys.map(key => `
+    const rows = paginatedKeys.map(key => `
       <tr>
         <td><a href="/${key.name}">${key.name}</a></td>
         <td>${key.metadata ? (() => {
             const date = new Date(key.metadata.updateAt * 1000);
             const pad = num => num.toString().padStart(2, '0');
             return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-        })() : 'N/A'}
-        </td>
+        })() : 'N/A'}</td>
       </tr>
-    `).join('<br>')
+    `).join('');
+
+    // 生成分页导航
+    const totalPages = Math.ceil(keys.keys.length / limit);
+    const pagination = `
+      <div style="margin-top: 20px;">
+        ${page > 1 ? `<a href="/list?page=${page - 1}&limit=${limit}&password=${password}">上一页</a>` : ''}
+        ${page < totalPages ? `<a href="/list?page=${page + 1}&limit=${limit}&password=${password}" style="margin-left: 10px;">下一页</a>` : ''}
+      </div>
+    `;
 
     // 生成包含表格的HTML
     const html = `
@@ -57,13 +101,15 @@ router.get('/dashborad/list', async () => {
               ${rows}
             </tbody>
           </table>
+          ${pagination}
         </body>
-      </html>`
+      </html>`;
 
     return new Response(html, {
         headers: { 'Content-Type': 'text/html' },
-    })
-})
+    });
+});
+
 
 router.get('/share/:md5', async (request) => {
     const lang = getI18n(request)
