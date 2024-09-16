@@ -32,8 +32,8 @@ router.get('/list', async (req) => {
             </style>
           </head>
           <body>
-            <h1>访问被拒绝</h1>
-            <p>密码不正确。</p>
+            <h1>Please check password.</h1>
+            <p>Password is flase.</p>
           </body>
         </html>`;
 
